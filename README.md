@@ -1,53 +1,156 @@
-# Generalist vs. Specialist: Wav2Vec2 vs. spectrogram models
+# Wav2Vec2 vs. Spectrogram Models for Audio Classification
 
-CSCI 494 course project. We compare MFCC + Random Forest, a log-mel CNN, ResNet-18 (ImageNet) and Wav2Vec2 (speech pretrained, raw waveform) on ESC-10 (environmental sounds, mismatched domain for Wav2Vec2) and Speech Commands (speech, matched domain). We look at clean accuracy, cost, and accuracy and calibration (ECE) under white and real noise at 20, 10 and 0 dB SNR. `sc_small` is Speech Commands with only 320 training clips, to match the size of ESC-10.
+A deep learning project comparing traditional spectrogram-based audio classifiers with a speech-pretrained **Wav2Vec2** model.
 
-### Results
+The goal was to evaluate how different audio representations and model architectures perform across matched and mismatched domains, including robustness under noise.
 
-Clean accuracy:
+## Overview
 
-| | ESC-10 | Speech Commands | SC, 320 clips |
-|---|---|---|---|
-| RF | 0.782 | 0.633 | 0.416 |
-| CNN | 0.832 | 0.970 | 0.598 |
-| ResNet-18 | 0.872 | 0.980 | 0.494 |
-| Wav2Vec2 | 0.822 | 0.984 | 0.950 |
+The project compares four approaches to audio classification:
 
-Wav2Vec2 is not better than ResNet on ESC-10, and it is only clearly better with little speech data. It has 94M parameters (CNN: 0.24M) and takes about 94 min to train on the full Speech Commands (CNN: 8 min). Under strong noise all neural networks become overconfident on ESC-10 (ECE 0.5-0.8) but stay calibrated on Speech Commands (ECE below 0.1). On `sc_small` ResNet and CNN are overconfident under noise and Wav2Vec2 is not. Temperature scaling fitted on clean validation data does not fix this.
+- MFCC features + Random Forest
+- Log-mel spectrogram CNN
+- ResNet-18 on spectrogram representations
+- Wav2Vec2 on raw audio waveforms
 
-### Conclusion
+Experiments were conducted on:
 
-Ребята, прочитайте пж вот это.
+- **ESC-10** — environmental sound classification
+- **Speech Commands** — speech classification
 
-Wav2Vec2 turned out not to be a universal model. On environmental sounds (ESC-10) it is no better than a plain ResNet-18, and on speech it is clearly better only when there is little data (320 clips: 0.950 against at most 0.598 for the other models). With the full dataset its advantage almost disappears (0.984 against 0.970 for the CNN), while it costs 390 times more parameters and about 11 times more training time, so it is only worth it when data is scarce and the domain matches its pretraining. Under noise accuracy drops for every model, and on ESC-10 all neural networks become confidently wrong (ECE 0.5-0.8), while on Speech Commands they stay well calibrated. This is not unique to Wav2Vec2, and the `sc_small` control shows that data size alone does not explain it, since Wav2Vec2 stays calibrated there and ResNet and CNN do not. The results agree with the idea that a domain mismatch breaks calibration under noise, but we cannot prove it: this is one seed, and the two datasets also differ in clip length and noise source.
+This setup allows comparison between a speech-pretrained model and spectrogram-based approaches both inside and outside the model's original domain.
 
-### Look at the results
+## Models
 
-The finished results are in `results/`, so there is no need to train anything. Open `notebooks/results.ipynb` (tables and plots). `notebooks/eda.ipynb` shows the data.
+### MFCC + Random Forest
 
-- `results/results.csv`: one row per dataset, model and noise condition (acc, f1, ece, nll, overconf, ece_ts, temperature)
-- `results/reliability.csv`: confidence bins for reliability diagrams
-- `results/cost.csv`: parameters, training time and latency per run
+A classical machine learning baseline using Mel-Frequency Cepstral Coefficients as audio features.
 
-### Reproduce
+### Log-Mel CNN
 
-Put ESC-50 in `data/ESC-50-master/` and Speech Commands v0.02 in `data/speech_commands_v0.02/` (the data is not in git), then:
+A convolutional neural network trained on log-mel spectrogram representations.
 
-    uv venv --python 3.12 .venv
-    uv pip install --python .venv/bin/python -r requirements.txt
-    make train
+### ResNet-18
 
-`make train` takes a few hours (Wav2Vec2 on Speech Commands is most of it). Finished experiments are skipped, so it can be stopped and restarted. `make run` executes the results notebook.
+An ImageNet-pretrained ResNet-18 adapted to classify audio represented as spectrogram images.
 
-### Code
+### Wav2Vec2
 
-- `src/data.py`: loading, splits, noise, log-mel
-- `src/models.py`: the four models and the training loop
-- `src/metrics.py`: accuracy, F1, ECE, NLL, temperature scaling
-- `src/main.py`: runs all experiments and writes `results/`
+A pretrained speech representation model operating directly on raw audio waveforms.
 
-ESC-10 uses 5 folds (test fold, next fold for validation, rest for training), Speech Commands uses the official lists. Models are trained on clean audio only, noise is added to the test clips, and temperature is fitted on clean validation data.
+## Datasets
 
-### Limitations
+### ESC-10
 
-One seed per experiment, and ESC-10 has only 400 test clips, so differences of a few points are not reliable. ESC-10 and Speech Commands differ in more than domain (clip length, class types, and the real noise comes from the Speech Commands background folder), so the results agree with the domain hypothesis but do not prove it.
+Environmental sound classification dataset containing categories of non-speech audio.
+
+It serves as a mismatched domain for Wav2Vec2, which was originally pretrained on speech.
+
+### Speech Commands
+
+Speech dataset containing short spoken commands.
+
+This represents a domain more closely aligned with Wav2Vec2 pretraining.
+
+## Evaluation
+
+The models were compared using several criteria:
+
+- Classification accuracy
+- Performance under added noise
+- Model calibration
+- Computational cost
+- Behavior across matched and mismatched domains
+
+## Experimental Pipeline
+
+```text
+Audio Dataset
+     ↓
+Preprocessing
+     ↓
+ ┌───────────────────────────────┐
+ │                               │
+MFCC                         Raw Waveform
+ │                               │
+Random Forest                 Wav2Vec2
+ │                               │
+ └──────────────┬────────────────┘
+                │
+        Spectrogram Models
+        ├── Log-Mel CNN
+        └── ResNet-18
+                │
+                ↓
+        Model Evaluation
+                │
+                ↓
+Accuracy / Noise Robustness /
+Calibration / Computational Cost
+```
+
+## Tech Stack
+
+- Python
+- PyTorch
+- Wav2Vec2
+- ResNet-18
+- Convolutional Neural Networks
+- Scikit-learn
+- MFCC
+- Log-Mel Spectrograms
+- Jupyter Notebook
+
+## Project Structure
+
+```text
+wav2vec2-vs-spectrogram/
+├── notebooks/        # Experiments and analysis
+├── results/          # Experimental results
+├── src/              # Core implementation
+├── Makefile          # Project commands
+├── requirements.txt  # Python dependencies
+└── README.md
+```
+
+## Running the Project
+
+Clone the repository:
+
+```bash
+git clone https://github.com/azacrafts/wav2vec2-vs-spectrogram.git
+cd wav2vec2-vs-spectrogram
+```
+
+Install the required dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+The experiment notebooks and analysis can then be found in the `notebooks/` directory.
+
+## Project Context
+
+This project was developed as part of a **CSCI 494 deep learning course project**.
+
+The main objective was to compare general-purpose spectrogram-based models with a speech-pretrained raw-waveform model and study how their performance changes across domains and under noisy conditions.
+
+## Key Questions
+
+The project investigates:
+
+- Does speech pretraining provide an advantage over spectrogram-based models?
+- How well does Wav2Vec2 generalize to environmental sounds?
+- How robust are the different architectures to noise?
+- How do accuracy and calibration change under distribution shift?
+- What trade-offs exist between predictive performance and computational cost?
+
+## Future Improvements
+
+- Evaluate additional self-supervised audio models
+- Test on larger audio datasets
+- Add more noise conditions and corruption types
+- Compare inference latency and memory usage
+- Perform more detailed calibration analysis
+- Add cross-dataset transfer learning experiments
